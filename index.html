@@ -216,7 +216,6 @@ The spread is one tick, so an order sits on the BBO or steps away; everything is
 <tr><td><code>book_frac</code></td><td>0.05</td><td>each order ≤5% of visible depth</td></tr>
 <tr><td><code>enter_threshold</code></td><td>p90-calibrated</td><td>|signal| needed to open</td></tr>
 <tr><td><code>clear_frac</code></td><td>0.5</td><td>unwind child order = half a lot</td></tr>
-<tr><td><code>flat_hours_to_end</code></td><td>0 (off)</td><td>reduce-only near settlement</td></tr>
 </table>
 <p>Below, item by item: <b>what was chosen · what was tried · how it did.</b> The evidence
 is a 6-round search that feeds the <b>realized price move itself</b> in as the signal
@@ -261,7 +260,7 @@ child orders cross the participation line sooner.</p>
 
 <h3>⑥ Unwinding</h3>
 <p><b>Chosen: markets that leave the universe go reduce-only, worked off in half-lot child orders.</b>
-<span class="warn-i">clear_frac and reduce-only-near-settlement have not been searched.</span></p>
+<span class="warn-i">clear_frac not yet settled.</span></p>
 
 <div class="bad note"><b>Open</b>: per-round <b>participation not yet computed</b> — the
 perfect-signal totals are not attainable numbers.</div>
