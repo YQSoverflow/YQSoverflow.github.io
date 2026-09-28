@@ -89,13 +89,14 @@ ul{margin:10px 0;padding-left:22px}li{margin:5px 0}
 </style>
 <div class="wrap">
 <h1>Polymarket Sim</h1>
-<p class="sub">Data · Fill mechanics · Execution design &amp; parameter search &nbsp;|&nbsp; 2026-05-24 – 2026-08-31 &nbsp;|&nbsp; sections are collapsed — click a title</p>
+<p class="sub">The feed · How the sim fills · The execution that works &nbsp;|&nbsp; 2026-05-24 – 2026-08-31 &nbsp;|&nbsp; click a title to expand</p>
 
-<details><summary>1. What the sim runs on <span class="tag">tick-by-tick + BBO · 552M events · 100 days</span></summary>
+<details><summary>1. The feed <span class="tag">tick-by-tick + BBO · 552M events · 100 days</span></summary>
 <div class="body">
-<p class="lede"><b>The backtest runs on the real feed, event by event.</b> Not a per-minute bar approximation.</p>
+<p class="lede"><b>The backtest runs on the real feed, event by event.</b></p>
 
-<p>Two streams — book snapshots and trade prints — interleaved by timestamp. Seventeen seconds of one game market just after open:</p>
+<p>Two streams — book snapshots and trade prints — interleaved by timestamp.
+Seventeen seconds of one game market just after open:</p>
 
 <pre class="feed">market nba-sas-nyk · <span class="dim">that day: 78,542 book updates · 7,922 trades</span>
 
@@ -105,13 +106,6 @@ ul{margin:10px 0;padding-left:22px}li{margin:5px 0}
 00:00:18.262   book    bid 0.46 × 1,426,078     ask 0.47 × 1,334,081
 00:00:18.303   book    bid 0.46 × 1,426,078     ask 0.47 × 1,337,432   <span class="ann">← someone joined the ask queue</span>
 00:00:24.829   book    bid 0.46 × 1,426,578     ask 0.47 × 1,337,432</pre>
-
-<pre>Full set  <b>552M events · 100 days</b> → when decisions fire · fill determination · queue position · the book at each moment
-60s bars  <b>only supply minute-level rolling statistics for the signal inputs</b>, and only closed bars are read</pre>
-
-<p><b><code>mid</code> is the book mid, not a traded price</b> — PnL is marked against it.
-<b><code>side</code> comes from the feed directly</b>, not inferred.
-<span class="warn-i">Decoded through 2026-08-31; the raw feed extends to 2026-09-13.</span></p>
 </div></details>
 
 <details><summary>2. How the sim fills <span class="tag">event-by-event replay · queue-position fills</span></summary>
@@ -200,78 +194,47 @@ ul{margin:10px 0;padding-left:22px}li{margin:5px 0}
 <tr><td>Fills</td><td>resting orders only, never taking; no market-impact model</td></tr>
 <tr><td>Settlement</td><td>positions close at the settlement price. <b>27.7% of universe markets settle inside the window</b> — not an edge case</td></tr>
 </table>
-
-<h3>Three layers of logs</h3>
-<p>Beyond the fill record: <b>the reason each decision did not place an order</b>,
-the per-market signal distribution every 5 minutes, and the missing-rate and value
-distribution of every input as replayed.</p>
 </div></details>
 
-<details><summary>3. Execution design &amp; parameter search <span class="tag">perfect signal · 6 rounds · all 100 days</span></summary>
+<details><summary>3. The execution that works <span class="tag">perfect-signal search · 6 rounds · 100 days</span></summary>
 <div class="body">
-<h3>Execution design</h3>
+<h3>The design</h3>
 <table>
 <tr><th>Layer</th><th>What it does</th></tr>
 <tr><td>signal → target position</td><td>the target is a <b>linear function</b> of the signal, not a fixed size past a threshold</td></tr>
-<tr><td>order size</td><td><b>one fixed lot, not distance-to-target</b> — a size that tracks the signal re-places on every event, and a re-place forfeits queue position</td></tr>
-<tr><td>order management</td><td>sticky band, size capped by visible depth, level offset relative to the BBO</td></tr>
+<tr><td>order size</td><td><b>one fixed lot</b> — a size that tracks the signal re-places on every event, and a re-place forfeits queue position</td></tr>
+<tr><td>order management</td><td>sticky band · size capped by visible depth · level offset from the BBO</td></tr>
 <tr><td>unwinding</td><td>markets that leave the universe go reduce-only</td></tr>
 </table>
+<p>Two venue facts behind it: the median spread is <b>one tick</b>, so an order sits on the
+BBO or steps away; and positions are sized in <b>shares, not dollars</b> — a share
+settles at $1 or $0, so N shares is $N of exposure at any price.</p>
 
-<p><b>Positions are sized in shares, not dollars.</b> A share settles at $1 or $0, so
-N shares is $N of exposure at any price; sizing in dollars would make a 0.02 market
-50× larger at equal risk.</p>
-
-<p><b>The venue's median spread is exactly one tick</b> — no room to quote inside it,
-so there is no push/pull layer: an order sits on the BBO or steps away from it.</p>
-
-<p><b>Two designs rejected by measurement</b>: inverse-volatility sizing (the σ estimate
-is <b>reliable where it does not matter and unreliable where it does</b> — it swings
-10× at thin prices, and mid-range it is stable but worth only ±40%); freezing the
-target on a timer (<b>profit-taking falls out of "target is a function of the current
-signal" — provided that function actually gets evaluated</b>).</p>
-
-<h3>Parameters</h3>
-<table>
-<tr><th>Parameter</th><th>Role</th><th>Default</th></tr>
-<tr><td><code>enter_threshold</code></td><td>|signal| needed to open. Set at the signal distribution's p90 — the same selectivity under any signal source</td><td>required</td></tr>
-<tr><td><code>lean_per_lot</code></td><td><b>the slope of the signal-to-position line</b> — extra |signal| needed to justify one more lot</td><td>required</td></tr>
-<tr><td><code>lot_shares</code></td><td>shares per order. <b>Fixed, does not track the signal</b></td><td>100</td></tr>
-<tr><td><code>max_position</code><br><code>max_position_event</code></td><td>hard cap per market / per event group</td><td>500<br>1000</td></tr>
-<tr><td><code>quote_offset_ticks</code></td><td>rest this many levels behind the touch. 0 = at the BBO</td><td>0</td></tr>
-<tr><td><code>sticky_ticks</code></td><td>leave a resting order alone while it is within this many levels of the BBO. 1 = re-place on every move; large values keep queue position at the cost of resting away from the market</td><td>2</td></tr>
-<tr><td><code>book_frac</code></td><td>cap per order as a fraction of the visible five-level size</td><td>0.20</td></tr>
-<tr><td><code>clear_frac</code></td><td>fraction of a lot used when working a position off</td><td>0.5</td></tr>
-<tr><td><code>flat_hours_to_end</code></td><td>reduce-only once the market is this close to settling. 0 = off</td><td>0</td></tr>
-</table>
-
-<h3>Search: fixing these parameters under a perfect signal</h3>
+<h3>Fixing the settings under a perfect signal</h3>
 <p>Feed the <b>realized price move itself</b> in as the signal — deliberate look-ahead.
-That decouples the execution ceiling from signal quality; the question becomes
-<b>if the signal were perfect, which execution settings are right</b>, and which of
-those conclusions transfer back to a real signal. Six rounds, all 100 days.</p>
+The execution ceiling decouples from signal quality: <b>if the signal were perfect,
+which settings are right — and which of those verdicts transfer back?</b>
+Six rounds, 100 days.</p>
 <table><tr><th class="">round</th><th class="n">lot</th><th class="n">book_frac</th><th class="n">offset</th><th class="n">sticky</th><th class="n">total</th><th class="n">bp</th><th class="n">fills</th><th class="n">settled</th></tr><tr><td class="">O6_size12x</td><td class="n">1200</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$501,944</td><td class="n">562.9</td><td class="n">126,751</td><td class="n">$56,176</td></tr><tr><td class="">O4_bf20</td><td class="n">600</td><td class="n">0.2</td><td class="n">0</td><td class="n">2</td><td class="n">$329,441</td><td class="n">543.7</td><td class="n">109,502</td><td class="n">$27,200</td></tr><tr class="hi"><td class="">O2_off0</td><td class="n">600</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$304,611</td><td class="n">554.9</td><td class="n">109,374</td><td class="n">$25,677</td></tr><tr><td class="">O1_base</td><td class="n">600</td><td class="n">0.05</td><td class="n">1</td><td class="n">2</td><td class="n">$126,927</td><td class="n">578.1</td><td class="n">36,084</td><td class="n">$24,829</td></tr><tr><td class="">O3_sticky0</td><td class="n">600</td><td class="n">0.05</td><td class="n">1</td><td class="n">0</td><td class="n">$113,374</td><td class="n">606.7</td><td class="n">29,073</td><td class="n">$29,667</td></tr><tr><td class="">O5_size1x</td><td class="n">100</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$63,702</td><td class="n">514.2</td><td class="n">78,675</td><td class="n">$3,599</td></tr></table>
+<p class="sub" style="margin:-6px 0 14px">lot = shares per order · book_frac = cap as share of visible depth ·
+offset = levels behind the touch · sticky = re-place only after drifting this many levels</p>
 
-<p><b>Size comes first.</b> 1× → 6× → 12× (lot 100/600/1200): total ×7.9 while
-per-unit edge <b>rises</b>, 514 → 555 → 563 bp. Adding size barely dilutes edge in
-this range — <b>what binds first is the participation cap, not edge decay</b>.</p>
+<p><b>Size first.</b> 1× → 12× lot: total ×7.9 and per-unit edge <b>rises</b>, 514 → 563 bp.
+<b>What binds is the participation cap, not edge decay.</b></p>
 
-<div class="warn note"><b><code>quote_offset_ticks</code>: does not transfer.</b> Under a
-perfect signal, resting one level back is pure loss — removing it multiplies the
-total by 2.4 ($304,611 vs $126,927). Yet bp is <i>higher</i> with it (578 vs 555):
-<b>stepping back does raise per-unit edge, by far too little to repay the two-thirds
-of volume it gives up.</b> Under a real signal, adverse selection costs much more —
-the offset stays.</div>
+<div class="warn note"><b>offset — keep it, but never tune it here.</b> The perfect signal
+says drop it (total ×2.4 without it). A real signal needs it: <b>the fills it gives up
+are precisely the expensive ones</b> — hindsight has no expensive fills, so this
+verdict does not transfer.</div>
 
-<p><b><code>sticky_ticks</code>: transfers.</b> At 0 (re-place on every BBO move) it does
-<i>worse</i> than baseline while orders go 1.57M → 3.23M.
-<b>The cost of chasing has nothing to do with signal quality</b> — this conclusion
-holds under the real signal too.</p>
+<p><b>sticky — transfers.</b> Re-pricing on every BBO move: twice the orders, <i>less</i>
+money. Chasing costs the same whether the signal is good or not.</p>
 
-<div class="bad note"><b>Open</b>: <code>lean_per_lot</code>, <code>clear_frac</code>,
-<code>flat_hours_to_end</code> not yet searched; <b>participation not computed per
-round</b> — O2 fills 109k times and almost certainly breaches the 2% cap, so these
-totals cannot be read as attainable.</div>
+<p class="lede"><b>Current best: one fixed lot · one level behind the touch · sticky 2 ·
+each order ≤5% of visible depth.</b></p>
+
+<div class="bad note"><b>Open</b>: three settings not yet searched; per-round
+participation not yet computed — the ceiling totals are not attainable numbers.</div>
 </div></details>
 
 </div></html>
