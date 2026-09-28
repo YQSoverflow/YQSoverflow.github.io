@@ -86,6 +86,16 @@ margin:14px 0;font-size:14px}
 padding:10px 14px;margin:14px 0 16px}
 ul{margin:10px 0;padding-left:22px}li{margin:5px 0}
 .warn-i{color:var(--warn)}
+.xgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px;margin:12px 0}
+.xcard{border:1px solid var(--line);border-radius:8px;padding:11px 13px;background:#fff}
+.xcard h4{margin:0 0 7px;font-size:13px;color:var(--muted);font-weight:600}
+.xfinal{font-size:14px;font-weight:600;margin:0 0 8px;line-height:1.5}
+.xtry{font-size:12.5px;color:#4b5563;margin:6px 0 0;padding-left:9px;border-left:2px solid var(--line);line-height:1.55}
+.xcard i{font-style:normal;font-size:10.5px;color:#fff;border-radius:3px;padding:0 5px;margin-right:6px;vertical-align:1px;font-weight:600}
+.xfinal i{background:#2f6f4f}
+.xtry i{background:#8a97a5}
+.xtry.open i{background:var(--warn)}
+.xtry.open{border-left-color:var(--warn)}
 </style>
 <div class="wrap">
 <h1>Polymarket Sim</h1>
@@ -200,13 +210,11 @@ Seventeen seconds of one game market just after open:</p>
 <details><summary>3. The execution that works <span class="tag">perfect-signal search · 100 days</span></summary>
 <div class="body">
 <h3>Overview</h3>
-<p><b>The signal sets a target position; the execution layer's job is to move the actual
-position there safely.</b>
-The target is a linear function of the signal; the gap does not matter — only <b>one fixed
-lot</b> rests at a time; resting orders live under three rules
-(level offset · sticky re-pricing band · depth cap); markets that leave the universe go reduce-only.
+<p><b>The signal sets a target position; the execution layer moves the actual position there
+safely</b>: linear target · one fixed lot ·
+three resting-order rules (level / sticky / depth cap) · reduce-only outside the universe.
 The spread is one tick, so an order sits on the BBO or steps away; everything is sized in
-<b>shares</b> — a share settles at $1 or $0, so N shares is $N of exposure at any price.</p>
+shares (a share settles at $1 or $0).</p>
 <table>
 <tr><th>Parameter</th><th>Current</th><th>Meaning</th></tr>
 <tr><td><code>lot_shares</code></td><td>600</td><td>shares per resting order</td></tr>
@@ -217,50 +225,40 @@ The spread is one tick, so an order sits on the BBO or steps away; everything is
 <tr><td><code>enter_threshold</code></td><td>p90-calibrated</td><td>|signal| needed to open</td></tr>
 <tr><td><code>clear_frac</code></td><td>0.5</td><td>unwind child order = half a lot</td></tr>
 </table>
-<p>Below, item by item: <b>what was chosen · what was tried · how it did.</b> The evidence
-is a search that feeds the <b>realized price move itself</b> in as the signal
-(deliberate look-ahead — the execution ceiling decouples from signal quality), all 100 days.</p>
+<p class="sub">Evidence: the realized price move itself fed in as the signal (deliberate
+look-ahead — the ceiling decouples from signal quality), all 100 days.</p>
 
-<h3>① Signal → target position</h3>
-<p><b>Chosen: linear.</b> |signal| past p90 opens, each further lot demands one more step of
-signal, capped at 5 lots — not a fixed size past a threshold.</p>
-<p>Tried: <b>freezing the target on a timer</b> — no. Profit-taking already falls out of
-"target is a function of the current signal"; freezing switches that function off.
-<span class="warn-i">The slope lean_per_lot has not been settled.</span></p>
+<h3>Item by item: chosen · tried · result</h3>
+<div class="xgrid">
 
-<h3>② Order size</h3>
-<p><b>Chosen: one fixed lot of 600 shares, never tracking the signal.</b> A size that tracks
-the signal re-places on every event, and a re-place forfeits queue position.</p>
-<p>Tried: lots at 1× / 6× / 12× — total ×7.9 while per-unit edge <b>rises</b>, 514 → 563 bp;
-adding size barely dilutes.
-<b>What binds is the participation cap, not edge decay</b>: 12× almost surely crosses the participation line (still to be computed), so 6× for now.</p>
+<div class="xcard"><h4>① Signal → target position</h4>
+<div class="xfinal"><i>Final</i>Linear: opens past p90 · one more step per lot · capped at 5 lots</div>
+<div class="xtry"><i>Tried</i>Freezing the target on a timer <span class="no">✗</span> profit-taking already falls out of "target = a function of the current signal"</div>
+<div class="xtry open"><i>Open</i>slope lean_per_lot</div></div>
 
-<h3>③ Where to rest (offset)</h3>
-<p><b>Chosen: 0 — at the BBO.</b> Under a perfect signal any retreat is pure loss — one level
-back divides the total by 2.4.</p>
-<p>Tried: <b>one level back</b> — per-unit edge is higher (578 vs 555, ≈ the 23 bp of buying one
-tick cheaper) but nowhere near repays the two-thirds of volume it gives up. In the earlier
-real-signal batch stepping back clearly won (it dodges adversely selected fills), so
-<b>this knob is not settled here — it gets re-decided in the imperfect-signal phase</b>.
-Also tried <b>inverse-volatility pricing</b> — no: the σ estimate is reliable where it does not
-matter and unreliable where it does (10× swings at thin prices).</p>
+<div class="xcard"><h4>② Order size</h4>
+<div class="xfinal"><i>Final</i>One fixed lot of 600 shares, never tracking the signal (re-place = lose the queue)</div>
+<div class="xtry"><i>Tried</i>1× → 12×: total <b>×7.9</b>, edge <b>rises 514 → 563</b> — the participation cap binds, not edge decay</div>
+<div class="xtry open"><i>Open</i>participation at 12× still to compute, so 6× for now</div></div>
 
-<h3>④ Re-pricing restraint (sticky)</h3>
-<p><b>Chosen: re-place only after drifting 2 levels.</b></p>
-<p>Tried: <b>sticky 0</b> (re-place on every BBO move) — orders 1.57M → 3.23M for <i>less</i>
-money. Chasing costs the same whether the signal is good or not — <b>this one transfers</b>.
-Larger sticky keeps the queue but rests too far from the market.</p>
+<div class="xcard"><h4>③ Where to rest (offset)</h4>
+<div class="xfinal"><i>Final</i>0, at the BBO — retreat is pure loss under a perfect signal (one level back ÷2.4)</div>
+<div class="xtry"><i>Tried</i>One level back: edge 578 vs 555 (≈ the 23 bp of one tick cheaper), volume −⅔; the old real-signal batch preferred it — <b>re-decided next phase</b></div>
+<div class="xtry"><i>Tried</i>Inverse-volatility pricing <span class="no">✗</span> σ is reliable where it does not matter, unreliable where it does</div></div>
 
-<h3>⑤ Depth cap per order (book_frac)</h3>
-<p><b>Chosen: each order ≤5% of visible depth.</b> The fill model has no authority over an
-order that would eat a large slice of the visible book.</p>
-<p>Tried: <b>20%</b> — total +8% under the perfect signal, but per-unit edge −11 bp, and larger
-child orders cross the participation line sooner.</p>
+<div class="xcard"><h4>④ Re-pricing restraint (sticky)</h4>
+<div class="xfinal"><i>Final</i>Re-place only after drifting 2 levels</div>
+<div class="xtry"><i>Tried</i>0, chase every move <span class="no">✗</span> orders <b>×2</b> for less money — independent of signal quality, <b>transfers</b></div></div>
 
-<h3>⑥ Unwinding</h3>
-<p><b>Chosen: markets that leave the universe go reduce-only, worked off in half-lot child orders.</b>
-<span class="warn-i">clear_frac not yet settled.</span></p>
+<div class="xcard"><h4>⑤ Depth cap (book_frac)</h4>
+<div class="xfinal"><i>Final</i>Each order ≤5% of visible depth</div>
+<div class="xtry"><i>Tried</i>20%: total +8%, edge −11 bp, and crosses the participation line sooner</div></div>
 
+<div class="xcard"><h4>⑥ Unwinding</h4>
+<div class="xfinal"><i>Final</i>Markets leaving the universe go reduce-only, half-lot child orders</div>
+<div class="xtry open"><i>Open</i>clear_frac</div></div>
+
+</div>
 <div class="bad note"><b>Open</b>: <b>participation not yet computed</b> — none of the
 perfect-signal totals is an attainable number.</div>
 </div></details>
