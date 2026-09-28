@@ -197,7 +197,7 @@ Seventeen seconds of one game market just after open:</p>
 </table>
 </div></details>
 
-<details><summary>3. The execution that works <span class="tag">perfect-signal search · 6 rounds · 100 days</span></summary>
+<details><summary>3. The execution that works <span class="tag">perfect-signal search · 100 days</span></summary>
 <div class="body">
 <h3>Overview</h3>
 <p><b>The signal sets a target position; the execution layer's job is to move the actual
@@ -211,38 +211,37 @@ The spread is one tick, so an order sits on the BBO or steps away; everything is
 <tr><th>Parameter</th><th>Current</th><th>Meaning</th></tr>
 <tr><td><code>lot_shares</code></td><td>600</td><td>shares per resting order</td></tr>
 <tr><td><code>max_position</code></td><td>3,000 (5 lots)</td><td>cap per market</td></tr>
-<tr><td><code>quote_offset_ticks</code></td><td>1</td><td>rest one level behind the touch</td></tr>
+<tr><td><code>quote_offset_ticks</code></td><td>0</td><td>levels behind the touch; 0 = at the BBO</td></tr>
 <tr><td><code>sticky_ticks</code></td><td>2</td><td>re-place only after drifting 2 levels</td></tr>
 <tr><td><code>book_frac</code></td><td>0.05</td><td>each order ≤5% of visible depth</td></tr>
 <tr><td><code>enter_threshold</code></td><td>p90-calibrated</td><td>|signal| needed to open</td></tr>
 <tr><td><code>clear_frac</code></td><td>0.5</td><td>unwind child order = half a lot</td></tr>
 </table>
 <p>Below, item by item: <b>what was chosen · what was tried · how it did.</b> The evidence
-is a 6-round search that feeds the <b>realized price move itself</b> in as the signal
-(deliberate look-ahead — the execution ceiling decouples from signal quality), all 100 days:</p>
-<table><tr><th class="">round</th><th class="n">lot</th><th class="n">book_frac</th><th class="n">offset</th><th class="n">sticky</th><th class="n">total</th><th class="n">bp</th><th class="n">fills</th><th class="n">settled</th></tr><tr><td class="">O6_size12x</td><td class="n">1200</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$501,944</td><td class="n">562.9</td><td class="n">126,751</td><td class="n">$56,176</td></tr><tr><td class="">O4_bf20</td><td class="n">600</td><td class="n">0.2</td><td class="n">0</td><td class="n">2</td><td class="n">$329,441</td><td class="n">543.7</td><td class="n">109,502</td><td class="n">$27,200</td></tr><tr class="hi"><td class="">O2_off0</td><td class="n">600</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$304,611</td><td class="n">554.9</td><td class="n">109,374</td><td class="n">$25,677</td></tr><tr><td class="">O1_base</td><td class="n">600</td><td class="n">0.05</td><td class="n">1</td><td class="n">2</td><td class="n">$126,927</td><td class="n">578.1</td><td class="n">36,084</td><td class="n">$24,829</td></tr><tr><td class="">O3_sticky0</td><td class="n">600</td><td class="n">0.05</td><td class="n">1</td><td class="n">0</td><td class="n">$113,374</td><td class="n">606.7</td><td class="n">29,073</td><td class="n">$29,667</td></tr><tr><td class="">O5_size1x</td><td class="n">100</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$63,702</td><td class="n">514.2</td><td class="n">78,675</td><td class="n">$3,599</td></tr></table>
-<p class="sub" style="margin:-6px 0 14px">lot = shares per order · book_frac = cap as share of visible depth ·
-offset = levels behind the touch · sticky = re-place only after drifting this many levels</p>
+is a search that feeds the <b>realized price move itself</b> in as the signal
+(deliberate look-ahead — the execution ceiling decouples from signal quality), all 100 days.</p>
 
 <h3>① Signal → target position</h3>
 <p><b>Chosen: linear.</b> |signal| past p90 opens, each further lot demands one more step of
 signal, capped at 5 lots — not a fixed size past a threshold.</p>
 <p>Tried: <b>freezing the target on a timer</b> — no. Profit-taking already falls out of
 "target is a function of the current signal"; freezing switches that function off.
-<span class="warn-i">The slope lean_per_lot has not been searched.</span></p>
+<span class="warn-i">The slope lean_per_lot has not been settled.</span></p>
 
 <h3>② Order size</h3>
 <p><b>Chosen: one fixed lot of 600 shares, never tracking the signal.</b> A size that tracks
 the signal re-places on every event, and a re-place forfeits queue position.</p>
 <p>Tried: lots at 1× / 6× / 12× — total ×7.9 while per-unit edge <b>rises</b>, 514 → 563 bp;
 adding size barely dilutes.
-<b>What binds is the participation cap, not edge decay</b>: 12× almost surely crosses the line, so 6×.</p>
+<b>What binds is the participation cap, not edge decay</b>: 12× almost surely crosses the participation line (still to be computed), so 6× for now.</p>
 
 <h3>③ Where to rest (offset)</h3>
-<p><b>Chosen: one level behind the touch.</b></p>
-<p>Tried: <b>at the BBO</b> — under the perfect signal, total ×2.4, so it looks right. But the
-fills the offset gives up <b>are precisely the expensive ones</b> (per-unit edge 578 vs 555),
-and hindsight has no expensive fills — this verdict does not transfer; with a real signal the offset stays.
+<p><b>Chosen: 0 — at the BBO.</b> Under a perfect signal any retreat is pure loss — one level
+back divides the total by 2.4.</p>
+<p>Tried: <b>one level back</b> — per-unit edge is higher (578 vs 555, ≈ the 23 bp of buying one
+tick cheaper) but nowhere near repays the two-thirds of volume it gives up. In the earlier
+real-signal batch stepping back clearly won (it dodges adversely selected fills), so
+<b>this knob is not settled here — it gets re-decided in the imperfect-signal phase</b>.
 Also tried <b>inverse-volatility pricing</b> — no: the σ estimate is reliable where it does not
 matter and unreliable where it does (10× swings at thin prices).</p>
 
@@ -262,8 +261,8 @@ child orders cross the participation line sooner.</p>
 <p><b>Chosen: markets that leave the universe go reduce-only, worked off in half-lot child orders.</b>
 <span class="warn-i">clear_frac not yet settled.</span></p>
 
-<div class="bad note"><b>Open</b>: per-round <b>participation not yet computed</b> — the
-perfect-signal totals are not attainable numbers.</div>
+<div class="bad note"><b>Open</b>: <b>participation not yet computed</b> — none of the
+perfect-signal totals is an attainable number.</div>
 </div></details>
 
 </div></html>
