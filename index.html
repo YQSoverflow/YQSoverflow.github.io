@@ -1,0 +1,277 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="robots" content="noindex">
+<title>Polymarket Sim — data, mechanics, execution search</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+.qsim{border:1px solid #d8dfe6;border-radius:6px;margin:14px 0;background:#fbfcfd}
+.qhead{padding:8px 12px;border-bottom:1px solid #e6ebf0;font-size:13px;background:#f3f6f9}
+.qhead .dim{color:#7a8a99;font-weight:400}
+.qctl{float:right}
+.qctl button{border:1px solid #c5cfd8;background:#fff;border-radius:4px;cursor:pointer;
+  padding:1px 9px;margin-left:4px;font:inherit;font-size:12px}
+.qctl button:hover{background:#eef3f8}
+.qctl #qn{margin-left:8px;font-size:12px}
+.qstage{padding:14px 16px 16px}
+.qlabel{font-size:13px;margin-bottom:10px;color:#33475b}
+.kb,.kt{display:inline-block;padding:1px 7px;border-radius:3px;color:#fff;font-size:11px;
+  margin-right:8px;vertical-align:1px}
+.kb{background:#5b7c9d} .kt{background:#c96a1f}
+.qtrack{position:relative;height:42px;background:#f0f3f6;border-radius:4px;overflow:hidden;
+  display:flex;align-items:stretch;border:1px solid #e2e8ee}
+.qtrack>div{transition:width .6s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;
+  justify-content:center;color:#fff;font-size:11.5px;white-space:nowrap;overflow:hidden}
+.qahead{background:linear-gradient(90deg,#93aac0,#6d8dab);justify-content:flex-end}
+.qahead span{padding-right:8px}
+.qfill{background:#d4a017;color:#1a1a1a;font-weight:600}
+.qme{background:#2f6f4f}
+.qme.idle{background:#63798c}
+.qbehind{background:#dde4ea;color:#7a8a99}
+.qsweep{position:absolute;left:0;top:0;height:100%;background:rgba(201,64,40,.5);
+  transition:width .5s ease-out,opacity .4s;z-index:3}
+.qlegend{margin-top:9px;font-size:11.5px;color:#7a8a99}
+.qlegend i{display:inline-block;width:11px;height:11px;border-radius:2px;
+  margin:0 4px 0 14px;vertical-align:-1px}
+.qlegend i:first-child{margin-left:0}
+.lg-a{background:#7d9bb6}.lg-m{background:#2f6f4f}.lg-f{background:#d4a017}
+.lg-b{background:#dde4ea;border:1px solid #c9d3db}
+.qnote{margin-top:11px;font-size:13px;color:#2c3e50;min-height:38px;line-height:1.6}
+
+pre.feed{background:#0f1720;color:#c8d6e5;border-left:3px solid #3d6b9e;line-height:1.55}
+pre.feed .hl{background:#1d2b3a;display:block}
+pre.feed .ann{color:#e8a33d}
+pre.feed .dim{color:#7089a0}
+
+:root{--ink:#1a1d21;--muted:#6b7280;--line:#e5e7eb;--bg:#fbfbfc;--card:#fff;
+--acc:#2563eb;--good:#059669;--bad:#dc2626;--warn:#b45309}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,
+"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0 0 28px;font-size:14px}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;
+margin:0 0 14px;overflow:hidden}
+details[open]{box-shadow:0 1px 3px rgba(0,0,0,.05)}
+summary{cursor:pointer;padding:16px 20px;font-size:17px;font-weight:600;
+list-style:none;display:flex;align-items:center;gap:10px;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";color:var(--muted);font-size:13px;transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+summary:hover{background:#f7f8fa}
+.tag{margin-left:auto;font-weight:400;font-size:12.5px;color:var(--muted)}
+.body{padding:4px 20px 22px;border-top:1px solid var(--line)}
+h3{font-size:15px;margin:22px 0 8px;color:var(--ink)}
+h3:first-child{margin-top:14px}
+p{margin:10px 0}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left}
+th{background:#f7f8fa;font-weight:600;font-size:12.5px;color:var(--muted);
+text-transform:uppercase;letter-spacing:.03em}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.hi td{background:#f0f7ff;font-weight:600}
+code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12.5px;
+font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+pre{background:#f7f8fa;border:1px solid var(--line);border-radius:8px;
+padding:14px 16px;overflow-x:auto;font-size:12.5px;line-height:1.55;margin:12px 0}
+.note{border-left:3px solid var(--acc);background:#f6f9ff;padding:10px 14px;
+margin:14px 0;font-size:14px}
+.warn{border-left-color:var(--warn);background:#fffbf0}
+.bad{border-left-color:var(--bad);background:#fef6f6}
+.good{color:var(--good);font-weight:600}.no{color:var(--bad);font-weight:600}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.kv div{background:#f7f8fa;border-radius:8px;padding:11px 13px}
+.kv b{display:block;font-size:19px;font-variant-numeric:tabular-nums}
+.kv span{font-size:12px;color:var(--muted)}
+.lede{font-size:16px;background:#f0f7ff;border-left:3px solid var(--acc);
+padding:10px 14px;margin:14px 0 16px}
+ul{margin:10px 0;padding-left:22px}li{margin:5px 0}
+.warn-i{color:var(--warn)}
+</style>
+<div class="wrap">
+<h1>Polymarket Sim</h1>
+<p class="sub">Data · Fill mechanics · Execution design &amp; parameter search &nbsp;|&nbsp; 2026-05-24 – 2026-08-31 &nbsp;|&nbsp; sections are collapsed — click a title</p>
+
+<details><summary>1. What the sim runs on <span class="tag">tick-by-tick + BBO · 552M events · 100 days</span></summary>
+<div class="body">
+<p class="lede"><b>The backtest runs on the real feed, event by event.</b> Not a per-minute bar approximation.</p>
+
+<p>Two streams — book snapshots and trade prints — interleaved by timestamp. Seventeen seconds of one game market just after open:</p>
+
+<pre class="feed">market nba-sas-nyk · <span class="dim">that day: 78,542 book updates · 7,922 trades</span>
+
+00:00:07.767   book    bid 0.46 × 1,422,514     ask 0.47 × 1,334,081
+<span class="hl">00:00:12.276   book    bid 0.46 × 1,422,505     ask 0.47 × 1,334,081   <span class="ann">← best bid just lost 9.3</span>
+00:00:12.305   trade   SELL 0.46 × 9.3                                <span class="ann">← 29 ms later, the print for the same event</span></span>
+00:00:18.262   book    bid 0.46 × 1,426,078     ask 0.47 × 1,334,081
+00:00:18.303   book    bid 0.46 × 1,426,078     ask 0.47 × 1,337,432   <span class="ann">← someone joined the ask queue</span>
+00:00:24.829   book    bid 0.46 × 1,426,578     ask 0.47 × 1,337,432</pre>
+
+<pre>Full set  <b>552M events · 100 days</b> → when decisions fire · fill determination · queue position · the book at each moment
+60s bars  <b>only supply minute-level rolling statistics for the signal inputs</b>, and only closed bars are read</pre>
+
+<p><b><code>mid</code> is the book mid, not a traded price</b> — PnL is marked against it.
+<b><code>side</code> comes from the feed directly</b>, not inferred.
+<span class="warn-i">Decoded through 2026-08-31; the raw feed extends to 2026-09-13.</span></p>
+</div></details>
+
+<details><summary>2. How the sim fills <span class="tag">event-by-event replay · queue-position fills</span></summary>
+<div class="body">
+<p class="lede">Fills come from <b>queue position</b>, not from "price touched = filled".</p>
+<p>Every resting order carries <code>queue_pos</code> — the shares sitting ahead of it at its own price.</p>
+<table>
+<tr><th>Event</th><th>Effect on queue_pos</th></tr>
+<tr><td><b>Order accepted</b></td><td>= the resting size at that price right now (we join the back). A price not among the visible levels is treated as never filling</td></tr>
+<tr><td><b>Size at our price shrinks</b></td><td>Can only move us forward, <b>never fills us</b> — the book does not say whether departures traded or cancelled</td></tr>
+<tr><td><b>A trade prints at our price</b></td><td><b>The only event that can push us past the front</b></td></tr>
+</table>
+<div class="qsim">
+  <div class="qhead">What one resting bid goes through <span class="dim">· constructed sequence, round numbers for legibility</span>
+    <span class="qctl"><button id="qp">▶ Play</button><button id="qb">‹</button><button id="qf">›</button>
+    <span id="qn" class="dim">1 / 8</span></span></div>
+  <div class="qstage">
+    <div class="qlabel"><span id="qk" class="kb">Book</span><span id="qd"></span></div>
+    <div class="qtrack">
+      <div class="qahead" id="qa"><span id="qas"></span></div>
+      <div class="qfill"  id="qfl"><span id="qfs"></span></div>
+      <div class="qme"    id="qm"></div>
+      <div class="qbehind" id="qbh"><span id="qbs"></span></div>
+      <div class="qsweep" id="qsw"></div>
+    </div>
+    <div class="qlegend"><i class="lg-a"></i>queued ahead
+      <i class="lg-m"></i>our order <i class="lg-f"></i>filled
+      <i class="lg-b"></i>joined behind us</div>
+    <div class="qnote" id="qnote"></div>
+  </div>
+</div>
+<script>
+(function(){
+ var S=750, F=[
+  {k:"Order",d:"buy 0.42 × 100 accepted",a:400,b:0,f:0,w:0,
+   n:"The 0.42 bid already holds <b>400 shares</b>. We join <b>behind all of them</b>."},
+  {k:"Book",d:"size at our price 400 → 250",a:250,b:0,f:0,w:0,
+   n:"150 left — but the book <b>does not say whether they traded or cancelled</b>. We move forward, and <b>this can never fill us</b>."},
+  {k:"Book",d:"size 250 → 500",a:250,b:250,f:0,w:0,
+   n:"The new 250 queue up <b>behind us</b>. Queue position never moves backwards."},
+  {k:"Trade",d:"buyer takes 0.42 × 80",a:250,b:250,f:0,w:0,idle:1,
+   n:"A buyer consumes the <b>ask</b>. Only <b>sell-side takes</b> consume a bid queue — this one is not about us."},
+  {k:"Book",d:"size 250 → 180",a:180,b:250,f:0,w:0,
+   n:"Forward to <b>180</b>."},
+  {k:"Trade",d:"seller takes 0.42 × 70",a:180,b:250,f:0,w:0,idle:1,dd:1,
+   n:"The book message above <b>already counted these 70</b> — same event, second message, skipped. Counting both would advance the queue twice."},
+  {k:"Trade",d:"seller takes 0.42 × 200",a:0,b:250,f:20,w:26.7,
+   n:"200 sweeps the 180 ahead of us; <b>the remaining 20 hit our order</b> — 20 filled, 80 to go."},
+  {k:"Trade",d:"seller takes 0.42 × 120",a:0,b:250,f:100,w:13.3,
+   n:"<b>The remaining 80 fill.</b> From placement to completion, only <b>sell-side takes</b> ever moved this order."}
+ ];
+ var i=0,tm=null,$=function(x){return document.getElementById(x)};
+ function pc(v){return (v/S*100)+'%'}
+ function draw(){
+  var f=F[i], rem=100-f.f;
+  $('qk').textContent=f.k; $('qk').className=f.k==="Trade"?"kt":"kb";
+  $('qd').textContent=f.d; $('qn').textContent=(i+1)+' / '+F.length;
+  $('qnote').innerHTML=f.n;
+  $('qa').style.width=pc(f.a);  $('qas').textContent=f.a?('ahead '+f.a):'';
+  $('qfl').style.width=pc(f.f); $('qfs').textContent=f.f?('filled '+f.f):'';
+  $('qm').style.width=pc(rem);  $('qm').textContent=rem?('ours '+rem):'';
+  $('qm').className='qme'+(f.idle?' idle':'');
+  $('qbh').style.width=pc(f.b); $('qbs').textContent=f.b?('behind '+f.b):'';
+  $('qsw').style.width=(f.w||0)+'%'; $('qsw').style.opacity=f.w?1:0;
+ }
+ function go(d){i=(i+d+F.length)%F.length;draw()}
+ function stop(){if(tm){clearInterval(tm);tm=null;$('qp').textContent='▶ Play'}}
+ $('qf').onclick=function(){stop();go(1)};
+ $('qb').onclick=function(){stop();go(-1)};
+ $('qp').onclick=function(){
+   if(tm){stop();return}
+   if(i===F.length-1){i=0;draw()}
+   $('qp').textContent='❚❚ Pause';
+   tm=setInterval(function(){if(i===F.length-1){stop();return}go(1)},1700);
+ };
+ draw();
+})();
+</script>
+
+
+<h3>What the sim assumes</h3>
+<table>
+<tr><th>Item</th><th>Value</th></tr>
+<tr><td>Latency</td><td>constant 200 ms, applied to placements and cancels alike</td></tr>
+<tr><td>Queue position</td><td>conservative — always assume we are last in line</td></tr>
+<tr><td>Fills</td><td>resting orders only, never taking; no market-impact model</td></tr>
+<tr><td>Settlement</td><td>positions close at the settlement price. <b>27.7% of universe markets settle inside the window</b> — not an edge case</td></tr>
+</table>
+
+<h3>Three layers of logs</h3>
+<p>Beyond the fill record: <b>the reason each decision did not place an order</b>,
+the per-market signal distribution every 5 minutes, and the missing-rate and value
+distribution of every input as replayed.</p>
+</div></details>
+
+<details><summary>3. Execution design &amp; parameter search <span class="tag">perfect signal · 6 rounds · all 100 days</span></summary>
+<div class="body">
+<h3>Execution design</h3>
+<table>
+<tr><th>Layer</th><th>What it does</th></tr>
+<tr><td>signal → target position</td><td>the target is a <b>linear function</b> of the signal, not a fixed size past a threshold</td></tr>
+<tr><td>order size</td><td><b>one fixed lot, not distance-to-target</b> — a size that tracks the signal re-places on every event, and a re-place forfeits queue position</td></tr>
+<tr><td>order management</td><td>sticky band, size capped by visible depth, level offset relative to the BBO</td></tr>
+<tr><td>unwinding</td><td>markets that leave the universe go reduce-only</td></tr>
+</table>
+
+<p><b>Positions are sized in shares, not dollars.</b> A share settles at $1 or $0, so
+N shares is $N of exposure at any price; sizing in dollars would make a 0.02 market
+50× larger at equal risk.</p>
+
+<p><b>The venue's median spread is exactly one tick</b> — no room to quote inside it,
+so there is no push/pull layer: an order sits on the BBO or steps away from it.</p>
+
+<p><b>Two designs rejected by measurement</b>: inverse-volatility sizing (the σ estimate
+is <b>reliable where it does not matter and unreliable where it does</b> — it swings
+10× at thin prices, and mid-range it is stable but worth only ±40%); freezing the
+target on a timer (<b>profit-taking falls out of "target is a function of the current
+signal" — provided that function actually gets evaluated</b>).</p>
+
+<h3>Parameters</h3>
+<table>
+<tr><th>Parameter</th><th>Role</th><th>Default</th></tr>
+<tr><td><code>enter_threshold</code></td><td>|signal| needed to open. Set at the signal distribution's p90 — the same selectivity under any signal source</td><td>required</td></tr>
+<tr><td><code>lean_per_lot</code></td><td><b>the slope of the signal-to-position line</b> — extra |signal| needed to justify one more lot</td><td>required</td></tr>
+<tr><td><code>lot_shares</code></td><td>shares per order. <b>Fixed, does not track the signal</b></td><td>100</td></tr>
+<tr><td><code>max_position</code><br><code>max_position_event</code></td><td>hard cap per market / per event group</td><td>500<br>1000</td></tr>
+<tr><td><code>quote_offset_ticks</code></td><td>rest this many levels behind the touch. 0 = at the BBO</td><td>0</td></tr>
+<tr><td><code>sticky_ticks</code></td><td>leave a resting order alone while it is within this many levels of the BBO. 1 = re-place on every move; large values keep queue position at the cost of resting away from the market</td><td>2</td></tr>
+<tr><td><code>book_frac</code></td><td>cap per order as a fraction of the visible five-level size</td><td>0.20</td></tr>
+<tr><td><code>clear_frac</code></td><td>fraction of a lot used when working a position off</td><td>0.5</td></tr>
+<tr><td><code>flat_hours_to_end</code></td><td>reduce-only once the market is this close to settling. 0 = off</td><td>0</td></tr>
+</table>
+
+<h3>Search: fixing these parameters under a perfect signal</h3>
+<p>Feed the <b>realized price move itself</b> in as the signal — deliberate look-ahead.
+That decouples the execution ceiling from signal quality; the question becomes
+<b>if the signal were perfect, which execution settings are right</b>, and which of
+those conclusions transfer back to a real signal. Six rounds, all 100 days.</p>
+<table><tr><th class="">round</th><th class="n">lot</th><th class="n">book_frac</th><th class="n">offset</th><th class="n">sticky</th><th class="n">total</th><th class="n">bp</th><th class="n">fills</th><th class="n">settled</th></tr><tr><td class="">O6_size12x</td><td class="n">1200</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$501,944</td><td class="n">562.9</td><td class="n">126,751</td><td class="n">$56,176</td></tr><tr><td class="">O4_bf20</td><td class="n">600</td><td class="n">0.2</td><td class="n">0</td><td class="n">2</td><td class="n">$329,441</td><td class="n">543.7</td><td class="n">109,502</td><td class="n">$27,200</td></tr><tr class="hi"><td class="">O2_off0</td><td class="n">600</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$304,611</td><td class="n">554.9</td><td class="n">109,374</td><td class="n">$25,677</td></tr><tr><td class="">O1_base</td><td class="n">600</td><td class="n">0.05</td><td class="n">1</td><td class="n">2</td><td class="n">$126,927</td><td class="n">578.1</td><td class="n">36,084</td><td class="n">$24,829</td></tr><tr><td class="">O3_sticky0</td><td class="n">600</td><td class="n">0.05</td><td class="n">1</td><td class="n">0</td><td class="n">$113,374</td><td class="n">606.7</td><td class="n">29,073</td><td class="n">$29,667</td></tr><tr><td class="">O5_size1x</td><td class="n">100</td><td class="n">0.05</td><td class="n">0</td><td class="n">2</td><td class="n">$63,702</td><td class="n">514.2</td><td class="n">78,675</td><td class="n">$3,599</td></tr></table>
+
+<p><b>Size comes first.</b> 1× → 6× → 12× (lot 100/600/1200): total ×7.9 while
+per-unit edge <b>rises</b>, 514 → 555 → 563 bp. Adding size barely dilutes edge in
+this range — <b>what binds first is the participation cap, not edge decay</b>.</p>
+
+<div class="warn note"><b><code>quote_offset_ticks</code>: does not transfer.</b> Under a
+perfect signal, resting one level back is pure loss — removing it multiplies the
+total by 2.4 ($304,611 vs $126,927). Yet bp is <i>higher</i> with it (578 vs 555):
+<b>stepping back does raise per-unit edge, by far too little to repay the two-thirds
+of volume it gives up.</b> Under a real signal, adverse selection costs much more —
+the offset stays.</div>
+
+<p><b><code>sticky_ticks</code>: transfers.</b> At 0 (re-place on every BBO move) it does
+<i>worse</i> than baseline while orders go 1.57M → 3.23M.
+<b>The cost of chasing has nothing to do with signal quality</b> — this conclusion
+holds under the real signal too.</p>
+
+<div class="bad note"><b>Open</b>: <code>lean_per_lot</code>, <code>clear_frac</code>,
+<code>flat_hours_to_end</code> not yet searched; <b>participation not computed per
+round</b> — O2 fills 109k times and almost certainly breaches the 2% cap, so these
+totals cannot be read as attainable.</div>
+</div></details>
+
+</div></html>
